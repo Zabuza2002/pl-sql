@@ -1,0 +1,17 @@
+DECLARE
+    TYPE first_name IS table OF dba_users%ROWTYPE index by pls_integer;
+    new_first_name first_name;
+    counts PLS_INTEGER;
+    CURSOR c1 IS SELECT * FROM dba_users where Last_Login is not null;
+BEGIN
+    OPEN c1; FETCH c1 BULK COLLECT INTO new_first_name;
+    counts := new_first_name.first;
+    FOR Dba_user IN  new_first_name.first .. new_first_name.last 
+    LOOP
+    --DROP USER new_first_name(counts).username CASCADE;
+    dbms_output.put_line( new_first_name(counts).username
+   ' '  new_first_name(counts).LAST_LOGIN );
+  counts := new_first_name.next(counts);
+    END LOOP;
+    
+END;

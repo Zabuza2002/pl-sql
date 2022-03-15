@@ -1,0 +1,77 @@
+
+ 
+ Create Or Replace Procedure db2xml(xmlfile varchar2) as 
+   doc xmldom.DOMDocument;
+   ret xmldom.DOMNode;
+   peoplenode xmldom.DOMNode;
+    -- пересекает весь стол народ  
+    Cursor cur_people is select * from people;
+   -- преобразует линию записей в таблице людей к элементу 
+    -- и вставляет в процесс документа DOM на корневых узлах людей  
+    procedure  addperson(doc xmldom.DOMDocument,people xmldom.DOMNode,
+                       v_pid  varchar2 ,v_name  varchar2 ,v_addr  varchar2 ,
+                       v_tel  varchar2 ,v_fax  varchar2 ,v_email  varchar2 )
+    is 
+     personelem xmldom.DOMElement;
+     personnode xmldom.DOMNode;
+     itemelem xmldom.DOMElement;
+     itemnode xmldom.DOMNode;
+      text  xmldom.DOMText;
+    begin 
+      -- Создать узел человека  
+     personelem:=xmldom.createElement(doc, 'PERSON' );
+      -- Установите Personalid Property  
+     xmldom.setAttribute(personelem, 'PERSONID' ,v_pid);
+     personnode:=xmldom.appendChild(peoplenode,xmldom.makeNode(personelem));
+      -- Добавьте элемент имени на узел человека 
+     itemelem:=xmldom.createElement(doc, 'NAME' );
+      -- Добавляем название узла на узел человека 
+     itemnode:=xmldom.appendChild(personnode,xmldom.makeNode(itemelem));
+      -- Создать текстовый узел 
+      text:=xmldom.createTextNode(doc,v_name);
+       --Добавьте текстовый узел в узле имя, чтобы сформировать полное имя имени. 
+     itemnode:=xmldom.appendChild(itemnode,xmldom.makeNode(text));
+      -- Добавить адресные элементы на узел человека 
+     itemelem:=xmldom.createElement(doc, 'ADDRESS' );
+     itemnode:=xmldom.appendChild(personnode,xmldom.makeNode(itemelem));
+      text:=xmldom.createTextNode(doc,v_addr);
+     itemnode:=xmldom.appendChild(itemnode,xmldom.makeNode(text));
+      --Добавить элемент TEL на узел человека 
+     itemelem:=xmldom.createElement(doc, 'TEL' );
+     itemnode:=xmldom.appendChild(personnode,xmldom.makeNode(itemelem));
+      text:=xmldom.createTextNode(doc,v_tel);
+     itemnode:=xmldom.appendChild(itemnode,xmldom.makeNode(text));
+      -- добавить элемент факса на узел человека 
+     itemelem:=xmldom.createElement(doc, 'FAX' );
+     itemnode:=xmldom.appendChild(personnode,xmldom.makeNode(itemelem));
+      text:=xmldom.createTextNode(doc,v_fax);
+     itemnode:=xmldom.appendChild(itemnode,xmldom.makeNode(text));
+      -- Добавьте элемент электронной почты на узел человека 
+     itemelem:=xmldom.createElement(doc, 'EMAIL' );
+     itemnode:=xmldom.appendChild(personnode,xmldom.makeNode(itemelem));
+      text:=xmldom.createTextNode(doc,v_email);
+     itemnode:=xmldom.appendChild(itemnode,xmldom.makeNode(text));
+    end  addperson;
+ begin 
+    -- Создаем новый документ DOM DOM  
+   doc:=xmldom.newDOMDocument;
+    -- Добавляем корневой узел для документирования людей 
+   peoplenode:=xmldom.makeNode(xmldom.createElement(doc, 'PEOPLE'));
+   ret:=xmldom.appendChild(xmldom.makeNode(doc),peoplenode);
+    -- Используем курсор для прохождения каждой строки в людях, генерирует элемент человека, соответствующего каждой строке, и добавьте его в people. 
+    For v_row In cur_people loop
+     addperson(doc,peoplenode,v_row.personid,v_row.name,v_row.address,v_row.tel,v_row.fax,v_row.email);
+    End loop;
+    -- напишите результат в назначенный файл  
+   xmldom.writeToFile(doc,xmlfile);
+   xmldom.freeDocument(doc);
+ end  db2xml;
+
+
+
+
+--ВЫЗОВ ПРОЦЕДУРЫ
+
+Begin
+db2xml('DUMP_FILES1'||'\abc.xml');
+End;

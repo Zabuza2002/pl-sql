@@ -1,0 +1,48 @@
+DECLARE
+     c utl_smtp.connection; -- переменная, представляющая smtp-соединение
+     smtpHost VARCHAR(65) := 'smtp.gmail.com';
+	 smtpPort INTEGER:= 587;
+	 emailHost VARCHAR(65) := 'nikolaytokarchuk0989@gmail.com';
+	 emailPassword VARCHAR(65) := '08522580..';
+BEGIN   
+    c := utl_smtp.open_connection(
+            host => smtpHost
+            ,port => smtpPort
+            , wallet_path => 'file:C:\app\takar\product\21c\dbhomeXE\data\wallet' --ваш путь
+            , wallet_password => 'banzai4ever' --ваш пароль от пакета
+            , secure_connection_before_smtp => false
+       ); --когда так открывается коннектор, то ehlo. Это для обоих способов авторизации
+    utl_smtp.ehlo(c, smtpHost);
+    utl_smtp.starttls(c); 
+    utl_smtp.ehlo(c, smtpHost);
+    utl_smtp.auth(
+      c => c,
+      username => emailHost,
+      password => emailPassword,
+      schemes  => utl_smtp.all_schemes
+					);
+        
+                utl_smtp.mail(c, emailHost);
+		utl_smtp.rcpt(c, 'nikolaytokarchuk0989@gmail.com');
+		utl_smtp.open_data(c); 
+		utl_smtp.write_data(c, 'From: andreytokarchuk0989@gmail.com' || utl_tcp.crlf); --ваша почта
+		utl_smtp.write_data(c, 'To:'|| 'andreytokarchuk0989@gmail.com' || utl_tcp.crlf);
+		utl_smtp.write_data(c, 'Subject: pismo'|| utl_tcp.crlf);
+		utl_smtp.write_data(c, 'Content-Type: text/plain' || utl_tcp.crlf);
+		utl_smtp.write_data(c, 'X-Mailer: SMTP' || utl_tcp.crlf);
+		utl_smtp.write_data(c, utl_tcp.crlf);
+    UTL_SMTP.close_data(c);
+    utl_smtp.quit(c); --закрытие соединения 
+EXCEPTION
+    WHEN utl_smtp.transient_error OR utl_smtp.permanent_error THEN --transient_error - при получении кода 4хх(ошибка на стороне клиента); permanent_error - при получении кода 5хх(ошибка на стороне сервера)
+        BEGIN
+            utl_smtp.quit(c); -- при этих ошибках закрываем соединение
+        EXCEPTION
+            WHEN utl_smtp.transient_error OR utl_smtp.permanent_error THEN
+                NULL; -- When the SMTP server is down or unavailable, we don't
+                   -- have a connection to the server. The quit call will
+                   -- raise an exception that we can ignore.
+        END;
+        raise_application_error(-20000,
+           'Failed to send mail due to the following error: ' || sqlerrm); --вызываем исключение с сообщением(sqlerrm) об ошибки
+END;

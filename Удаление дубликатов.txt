@@ -1,0 +1,19 @@
+create table doubles (
+id number(4),
+name varchar2(100),
+fam varchar2(100));
+
+INSERT INTO doubles
+VALUES ( '1','paul','popkov');
+INSERT INTO doubles
+VALUES ( '1','paul','popkov');
+INSERT INTO doubles
+VALUES ( '1','paul','popkov');
+
+DELETE 
+FROM doubles t1
+WHERE EXISTS ( SELECT NULL
+               FROM doubles t2
+               WHERE t1.rowid > t2.rowid -- оставить только запись с минимальным ID строки
+                 AND t1.name = t2.name
+                 AND t1.fam = t2.fam)

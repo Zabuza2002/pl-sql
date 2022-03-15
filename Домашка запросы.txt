@@ -1,0 +1,777 @@
+'ЗАПРОСЫ'
+1)
+'Составьте запрос, позволяющий получить номер покупателя, дату заказа, номер заказа для тех заказов, которые были сделаны во вторник или в четверг.'
+select orders.customer_num as customer_number, customer.fname || ' ' || customer.lname as customer_name, orders.order_date as order_date, to_char(orders.order_date, 'Day') as Day, orders.order_num as order_number
+from orders inner join customer
+on orders.customer_num = customer.customer_num
+where to_char(orders.order_date, 'D') in ('2','4');
+2)
+'Составьте запрос, позволяющий получить номера заказа, даты заказов, номера покупателей и даты доставки для всех заказов, 
+которые не были оплачены, но были доставлены в течении первых 9 месяцев 1998 года.'
+select orders.customer_num as customer_number, customer.fname || ' ' || customer.lname as customer_name, orders.order_date as order_date,  orders.order_num as order_number, orders.ship_date, paid_date 
+from orders inner join customer
+on orders.customer_num = customer.customer_num
+where paid_date is null and extract(YEAR FROM orders.ship_date)= 98 AND EXTRACT(MONTH FROM orders.ship_date) BETWEEN 01 AND 09  ;
+3)
+'Составьте запрос, позволяющий получить имя, фамилию, город, штат, компанию покупателей, название компании которых оканчивается на слово 'Sports', 
+а сами покупатели проживают в штате Калифорния ('CA') 
+или в штате Флорида ('FL'). Результат запроса должен быть отсортирован по полю state по возрастанию и по полю company по убыванию.'
+SELECT FNAME, LNAME, CITY, STATES, COMPANY
+FROM CUSTOMER
+WHERE  COMPANY LIKE '%Sports' AND STATES IN ('CA','FL')
+order by states ASC,
+       company DESC;
+4)
+'Составьте запрос, позволяющий получить максимальные, минимальные и среднеарифметические расходы на доставку одного заказа. Результаты запроса должны быть округлены до целого.'
+select round(max(ship_charge),0) as maximum,round(min(ship_charge),0) as minimum, round(avg(ship_charge),0) as average 
+from orders
+
+5)
+'Составьте запрос, позволяющий найти номера заказов, даты заказов, даты доставки тех заказов, которые были доставлены в том же самом месяце 
+(не в месяце с таким же названием!), что и заказаны.'
+select orders.order_num as order_number, orders.order_date as order_date,orders.ship_date
+from orders
+where extract(month from orders.order_date) = extract(month from orders.ship_date);
+6)
+'Напишите запрос для получения имен покупателей и суммарного веса доставленных для них товаров тех покупателей,
+у которых суммарный вес доставленных товаров больше 30; отсортируйте результат по последнему полю в обратном порядке.'
+select customer.fname || ' ' || customer.lname as customer, SUM(orders.ship_weight) as total_ship_weight
+from customer inner join orders
+ON customer.customer_num = orders.customer_num
+where orders.ship_weight > 80
+group by customer.fname || ' ' || customer.lname,orders.ship_weight
+order by sum(orders.ship_weight) desc;
+
+7)
+'Напишите запрос для получения имен покупателей и суммарной стоимости заказанных ими товаров. 
+Если покупатель не делал заказов, стоимость должна равняться нулю. Отсортируйте результат запроса по последнему полю.'
+select customer.customer_num,customer.fname, customer.lname, coalesce(sum(items.total_price), 0) as sum_cost 
+from customer
+full outer join orders
+on customer.customer_num = orders.customer_num
+full outer join items
+on items.order_num = orders.order_num
+group by customer.fname, customer.lname, customer.customer_num
+order by sum_cost;
+
+
+8)
+'Составьте запрос, определяющий пары товаров, цены на которые различаются между собой более чем в два раза.'
+Select items.item_num as first_item,stock.descriptions,items.total_price as first_price, right_side.item_num as second_item,
+stock.descriptions as description2, right_side.total_price as second_price from items 
+inner join items right_side 
+on items.total_price/right_side.total_price > 2 and items.item_num < right_side.item_num
+inner join stock
+on items.stock_num = stock.stock_num ;
+
+9)
+'Составьте запрос, определяющий пары заказов, сделанных в один месяц.'
+Select o.order_num as num1,o.order_date as order_date, o2.order_num as num2,o2.order_date as order_date2  from orders o 
+left join orders o2 
+on extract(month from o.order_date) = extract(month from o2.order_date) and o.order_num <> o2.order_num
+order by o.order_num asc, o2.order_num asc ;
+
+10)
+'Напишите запрос для получения имен производителей, товары которых никогда не покупались.'
+select manufact.manu_name as never_bought, items.order_num
+from manufact 
+full outer join stock
+on manufact.manu_code = stock.manu_code
+full outer join items
+on manufact.manu_code = items.manu_code
+where manufact.manu_code is null or  items.manu_code is null and manufact.manu_code is null or stock.manu_code is null ;
+
+11)
+' Выведите информацию о тех заказах, в которых все товары выпущены производителем с кодом 'ANZ'.'
+select items.order_num as order_number, items.manu_code
+from items where items.manu_code = all('ANZ')
+group by items.manu_code,items.order_num; 
+12)
+'Напишите запрос, который выводит имя компании и суммарную стоимость проданных товаров данной компании.
+Отсортируйте запрос в следующем порядке: сначала все компании, начинающиеся на 'H', а затем все остальные в алфавитном порядке.'
+select  items.manu_code, sum(items.total_price)
+from items 
+group by items.manu_code
+order by case when items.manu_code like ('H%') then items.manu_code end,items.manu_code asc;
+
+13)
+'Напишите запрос, устанавливающий для неоплаченных заказов расходы на доставку в размере 7% от стоимости заказа.'
+select orders.customer_num as customer_number, customer.fname || ' ' || customer.lname as customer_name, orders.order_date as order_date, 
+orders.order_num as order_number, orders.ship_date, paid_date,sum(items.total_price) as price, sum(items.total_price+(items.total_price/100)*7) as overprice
+from orders inner join customer
+on orders.customer_num = customer.customer_num
+inner join items
+on orders.order_num = items.order_num
+where paid_date is null 
+group by orders.customer_num, customer.fname || ' ' || customer.lname, orders.order_date, orders.order_num, orders.ship_date, paid_date   ;
+
+
+set serveroutput ON;
+set verify off;
+14)
+'“Hello, World!”
+Написать PL/SQL программу “Hello, World!”'
+begin
+dbms_output.put_line('hello,world');
+end;
+
+15)
+'“Ветвления и циклы”
+Продемонстрировать использование операторов ветвления if, case, циклов loop, while, for и меток в программе на PL/SQL.'
+        1.'IF'
+        declare
+            Input number := &Input;
+        begin
+            if Input >= 18 THEN
+                dbms_output.put_line('вы совершеннолетний, вам ' || Input || ' ' || 'лет');
+            else
+                dbms_output.put_line('вам меньше 18 лет, а именно '|| Input || ' ' || 'лет');
+            end if;
+        end;
+        
+        2.'CASE'
+        declare
+            Input number := &Input;
+        begin
+            case 
+                when Input = 0  then dbms_output.put_line('вы ввели 0');
+                when mod(Input, 2) = 0  then dbms_output.put_line('вы ввели четное число, а именно: ' || Input);
+            else dbms_output.put_line('вы ввели нечетное число, а именно: ' || Input);
+            end case;
+        end;
+        
+        3.'LOOP'
+        declare
+            cursor cursor1 is select * from manufact;            
+            cursor_rec manufact%rowtype; 
+            Input number := &Input;
+        begin
+                open cursor1;
+            loop
+                fetch cursor1 into cursor_rec;
+                exit when cursor1%notfound;
+                dbms_output.put_line(cursor_rec.manu_code ||' '||  Input);
+                Input := Input + 1;
+            end loop;
+                dbms_output.put_line('Всего строк:'||cursor1%rowcount);
+                close cursor1;
+        end;
+        
+        4.'WHILE'
+        declare
+            cursor cursor1 is select * from manufact;            
+            cursor_rec manufact%rowtype; 
+            Input number := 1;
+        begin
+                open cursor1;
+            while Input < 10
+            loop
+                fetch cursor1 into cursor_rec;
+                dbms_output.put_line(cursor_rec.manu_code ||' '||  Input);
+                Input := Input + 1;
+            end loop;
+                dbms_output.put_line('Всего строк:'||cursor1%rowcount);
+                close cursor1;
+        end;
+        
+        5.'FOR'
+         declare
+            cursor cursor1 is select * from manufact where manu_code like ('A%');            
+            cursor_rec manufact%rowtype; 
+            Input number := &Input;
+            a number := 1;
+        begin
+                open cursor1;
+            for i in 1..Input
+            loop
+                fetch cursor1 into cursor_rec;
+                dbms_output.put_line(cursor_rec.manu_code ||' '||  a);
+                a := a + 1;
+            end loop;
+                dbms_output.put_line('Всего строк:'||cursor1%rowcount);
+                close cursor1;
+        end;
+        
+         6.'GOTO'
+         declare
+            Input number := &Input;
+            a number := 100;
+        begin
+               if a <= Input then
+               GOTO bad_num;
+               end if;
+                dbms_output.put_line('Вы ввели:'||Input);
+        <<bad_num>>
+        a := 0;
+         dbms_output.put_line('было:'||Input|| ' ' ||'стало:' || a);
+        end;
+16)
+'16. “Исключительные ситуация”
+Продемонстрировать обработку исключительных ситуаций
+• с известными и
+• неизвестными именами,
+• генерацию пользовательских исключений в программе на PL/SQL.'
+        declare
+            e_null exception;
+            e_bad_num exception;
+            Input number := &Input;
+            i number := &i;
+            d number := &d;
+            c number;
+        begin
+            case 
+                when Input = 0  then dbms_output.put_line('вы ввели 0');
+                when Input = 13  then raise e_bad_num;
+                when mod(Input, 2) = 0  then dbms_output.put_line('вы ввели четное число, а именно: ' || Input);
+            else dbms_output.put_line('вы ввели нечетное число, а именно: ' || Input);
+            end case;
+            c := i / d;
+            dbms_output.put_line(i || '/' || d || '=' || c);
+            exception 
+            when e_bad_num then dbms_output.put_line('вы ввели несчастливое число, а именно: ' || Input);
+            when zero_divide then dbms_output.put_line('делить на ноль нельзя!');
+            when others then raise;
+        end;
+
+17)
+'“Числа Фибоначчи”
+Написать программу, выводящую на экран последовательность чисел Фибоначчи из стольких чисел, сколько имеется строк в таблице orders.
+Указание:
+Использовать конструкцию select into.
+Не использовать рекурсию и массивы.'       
+declare
+    a number := 0;
+    b number := 1;
+    c number;
+    temp number;
+    i number;
+    begin
+    select count(orders.order_num)
+        into c
+        from orders;
+   dbms_output.put_line('последовательность Фибоначи:');
+   dbms_output.put_line(a);
+   dbms_output.put_line(b);
+   for i in 2..c
+   loop
+      temp:= a + b;
+      a := b;
+      b := temp;
+      dbms_output.put_line(temp);
+   end loop;
+   dbms_output.put_line('Всего строк в таблице:' || c);
+end;  
+
+18)
+' “Наибольший общий делитель”
+Написать программу, выводящую на экран наибольший общий делитель для количества строк заказов и количества заказчиков.
+Указание: 
+Использовать конструкцию select into.
+Использовать алгоритм Евклида.'
+declare
+    orderss number;
+    customers number := 0;
+    temp number;
+begin
+    select count(orders.order_num)
+        into orderss
+        from orders;
+        select count(customer.customer_num)
+        into customers
+        from customer;
+        
+          dbms_output.put_line('заказов:' || orderss);
+          dbms_output.put_line('Покупателей:' || customers);
+  while mod(orderss,customers) != 0 
+    loop
+    temp := mod(orderss,customers);
+    orderss := customers;
+    customers := temp;
+  end loop;
+  dbms_output.put_line('НОД этих чисел равен: ' || temp);
+end;  
+
+
+ 
+19)
+' “Троичное счисление”
+Написать программу, выводящую на экран количество строк в таблице catalog в троичной системе счисления.
+Указание:
+Использовать конструкцию select into.
+Перевод в троичную систему счисления осуществлять вручную.'
+declare
+    a number := 0;
+    b number := 1;
+    c number;
+    digital_3 varchar(35);
+    temp number;
+    i number;
+    counts number := 0;
+    begin
+    select count(catalog1.catalog_num)
+        into i
+        from catalog1;
+   dbms_output.put_line('Переводимое число: ' || i);
+while b <= i
+loop 
+counts := counts + 1;
+dbms_output.put_line('разряд '||'('|| counts ||')' || ' ' || b);
+b := b * 3;
+a := a + 1;
+end loop;
+b := b / 3;
+dbms_output.put_line('Всего разрядов: ' || a);
+counts := 0;
+while b >=1
+loop
+  counts := counts + 1;
+  temp := floor(i/b);
+         dbms_output.put_line('Число '||'('|| counts ||')' || ' ' || temp);
+  if temp =  1 then
+      i:= i-b;
+  end if;
+  if temp = 2 then 
+      i:= i-(b*2);
+  end if;
+    b:= b/3;
+end loop;
+end;
+
+
+
+20)
+'“Палиндром”
+Написать программу, выводящую на экран имя покупателей и проверяющую, является имя пользователя палиндромом.
+Указание: 
+
+Использовать конструкцию select into.'
+
+SET SERVEROUTPUT ON
+DECLARE
+    fname_r VARCHAR(255);
+    TYPE first_name IS table OF customer%ROWTYPE;
+    new_first_name first_name;
+    counts PLS_INTEGER;
+    CURSOR c1 IS SELECT * FROM customer;
+BEGIN
+    OPEN c1; FETCH c1 BULK COLLECT INTO new_first_name;
+    counts := new_first_name.first;
+    FOR cust IN new_first_name.first .. new_first_name.last 
+    LOOP
+    SELECT reverse(new_first_name(counts).fname) INTO fname_r
+    FROM DUAL;
+        IF lower(new_first_name(counts).fname)  =  lower(fname_r)
+        THEN dbms_output.put_line('IS palindrom' || ' ' ||  new_first_name(counts).fname || ' ' ||  fname_r);
+        ELSE dbms_output.put_line('No palindrom' || ' ' ||  new_first_name(counts).fname || ' ' || fname_r);
+        END IF;
+        counts := new_first_name.next(counts);
+    END LOOP;
+END;
+       
+21)
+'«Вложенные таблицы»
+Напишите программу на PL/SQL, выводящую список покупателей (все поля) в обратном порядке следования их в БД с использованием вложенной таблицы.'
+DECLARE
+    TYPE first_name IS table OF customer%ROWTYPE;
+    new_first_name first_name;
+    counts PLS_INTEGER;
+    CURSOR c1 IS SELECT * FROM customer;
+BEGIN
+    OPEN c1; FETCH c1 BULK COLLECT INTO new_first_name;
+    counts := new_first_name.last;
+    FOR customers IN  new_first_name.first .. new_first_name.last 
+    LOOP
+    dbms_output.put_line( new_first_name(counts).customer_num 
+  || ' ' ||new_first_name(counts).fname || ' ' || new_first_name(counts).lname
+  || ' ' || new_first_name(counts).company || ' ' || new_first_name(counts).ADDRESS1
+  || ' ' || new_first_name(counts).address2 || ' ' || new_first_name(counts).city 
+  || ' ' || new_first_name(counts).states || ' ' || new_first_name(counts).zipcode 
+  || ' ' || new_first_name(counts).phone );
+  counts := new_first_name.prior(counts);
+    END LOOP;
+    
+END;
+
+22)
+'«Массив переменной длины»
+Напишите программу на PL/SQL, выводящую список покупателей (все поля) с использованием массива переменной длины.'
+DECLARE
+  TYPE first_name IS VARRAY(20) OF customer%ROWTYPE;
+   new_first_name first_name := first_name();
+    counts PLS_INTEGER;
+    CURSOR c1 IS SELECT * FROM customer;
+BEGIN
+    OPEN c1; FETCH c1 BULK COLLECT INTO new_first_name;
+    counts := new_first_name.first;
+    FOR customers IN  new_first_name.first .. new_first_name.last 
+    LOOP
+      dbms_output.put_line( new_first_name(counts).customer_num 
+      || ' ' ||new_first_name(counts).fname || ' ' || new_first_name(counts).lname
+      || ' ' || new_first_name(counts).company || ' ' || new_first_name(counts).ADDRESS1
+      || ' ' || new_first_name(counts).address2 || ' ' || new_first_name(counts).city 
+      || ' ' || new_first_name(counts).states || ' ' || new_first_name(counts).zipcode 
+      || ' ' || new_first_name(counts).phone );
+        counts := new_first_name.next(counts);
+    END LOOP;
+END;
+
+23)
+'«Ассоциативный массив»
+Напишите программу на PL/SQL, выводящую список производителей 
+(код и имя) с использованием ассоциативного массива.'
+
+DECLARE
+    TYPE first_name IS table OF manufact%ROWTYPE index by pls_integer;
+    new_first_name first_name;
+    counts PLS_INTEGER;
+    CURSOR c1 IS SELECT * FROM manufact;
+BEGIN
+    OPEN c1; FETCH c1 BULK COLLECT INTO new_first_name;
+    counts := new_first_name.first;
+    FOR manufactures IN  new_first_name.first .. new_first_name.last 
+    LOOP
+    dbms_output.put_line( new_first_name(counts).manu_code
+  || ' ' || new_first_name(counts).manu_name );
+  counts := new_first_name.next(counts);
+    END LOOP;
+    
+END;
+
+24)
+'«Количество заказов покупателя»
+Напишите программу на PL/SQL, выводящую имя, фамилию покупателя, 
+общее число сделанных им заказов (если покупатель не делал заказов, то 0) 
+и число неоплаченных им заказов (если такие есть).'
+select customer.fname, customer.lname, coalesce(count(orders.order_num), 0) as orders_in_total, sum(case when orders.paid_date is null then 1 else 0 end) as not_payed_orders_count
+from customer
+right join orders
+on customer.customer_num = orders.customer_num
+group by customer.fname, customer.lname,customer.customer_num,orders.paid_date,customer.customer_num
+order by not_payed_orders_count desc;
+
+25)
+'«Статистика по производителям товаров»
+Напишите программу на PL/SQL, выводящую статистику по производителям товаров -
+таблица со столбцами: название производителя, количество наименований товаров этого производителя,  
+сумма проданных товаров этого производителя, доля суммы продаж товаров этого производителя по отношению ко всем производителям (%).'
+
+select manufact.manu_name, coalesce(count(stock.stock_num),0) as total_supplies,
+coalesce(sum(items.total_price),0)as sold_in_total,round(100*(count(items.total_price)) / sum(count(items.total_price)) over(),0) || '%'  as percent_of_sold  from items
+inner join stock
+on items.stock_num = stock.stock_num
+right join manufact
+on items.manu_code = manufact.manu_code
+group by manufact.manu_name
+order by sold_in_total desc;
+
+
+26)
+'«Хранимая функция» 
+Напишите хранимую функцию, подсчитывающую квадрат числа. Аргумент должен быть символьного типа. Предусмотрите обработку исключения в случае ошибки преобразования из строки в число.'
+
+create or replace function x_2(x varchar) return varchar
+    is 
+     e_varchar exception;
+    pragma exception_init (e_varchar,-06502);
+    c number;
+    begin
+    c := x*x;
+    return c;
+    exception
+    when e_varchar then dbms_output.put_line('кудааа, мы лезем??'); 
+    end x_2;
+
+declare
+ e_varchar exception;
+    pragma exception_init (e_varchar,-06502);
+    c number;
+    begin
+    select count(orders.order_num)
+        into c
+        from orders;
+   dbms_output.put_line('возводимое число: '|| c);
+   c := 'aboba';
+   c := x_2(c);
+    dbms_output.put_line('результат: '|| c);
+    exception
+    when e_varchar then dbms_output.put_line('кудааа, мы лезем??(Вы попытались возвести в квадрат строковое значение а не число)'); 
+end;  
+
+--29 
+CREATE or replace FUNCTION SumTotalCustomer (customer_num IN int) 
+   RETURN Varchar2 
+IS 
+   TYPE SumCustomer IS TABLE OF INT INDEX BY VARCHAR(3); 
+    SumCustom SumCustomer; 
+    Indexitems varchar(5); 
+    CURSOR c1 IS  
+    select distinct coalesce(sum (items.total_price) over (partition by customer_num), 0 ) as "item", customer_num 
+    from customer 
+    Left join items on items.order_num = any(select order_num from orders where orders.customer_num = customer.customer_num); 
+BEGIN 
+for j in c1  
+    Loop 
+    SumCustom(To_Char(j.customer_num)) := j."item"; 
+    End loop; 
+   RETURN 'Суммарная стоимость заказанных товаров покупателем №'': ' || SumCustom(To_Char(customer_num)); 
+EXCEPTION 
+WHEN VALUE_ERROR THEN 
+   RETURN 'Ошибка считывания номера! Введите корректный номер!'; 
+END; 
+ 
+ 
+select SumTotalCustomer(101) from dual 
+union 
+select SumTotalCustomer(102) from dual 
+union 
+select SumTotalCustomer(103) from dual 
+ 
+--30 
+ 
+CREATE OR REPLACE PROCEDURE discount(firstname CHAR, lastname CHAR) AS 
+    cust_num NUMBER; 
+    CURSOR order_cur  
+    IS SELECT order_date, ship_date FROM orders WHERE customer_num = cust_num; 
+    days_number NUMBER := 0; 
+    order_count NUMBER := 0; 
+BEGIN 
+    SELECT customer_num INTO cust_num  
+    FROM customer  
+    WHERE customer.fname = firstname AND customer.lname = lastname; 
+     
+    FOR ord IN order_cur  
+    LOOP 
+        days_number := days_number + (ord.ship_date - ord.order_date); 
+        order_count := order_count + 1; 
+    END LOOP; 
+     
+    IF (order_count != 0 AND days_number/order_count < 7) THEN 
+        FOR ord IN (SELECT order_num  
+        FROM orders  
+        WHERE customer_num = cust_num AND paid_date IS NULL)  
+        LOOP 
+            UPDATE items 
+            SET total_price = total_price*0.9 
+            WHERE order_num = ord.order_num; 
+        END LOOP; 
+    END IF; 
+EXCEPTION 
+    WHEN no_data_found THEN 
+        DBMS_OUTPUT.put_line('Покупатель не найден'); 
+END;
+
+CREATE OR REPLACE PACKAGE neopl_zakaz AS 
+    PROCEDURE o_p (percentik NUMBER); 
+    FUNCTION count_zakaz RETURN NUMBER; 
+    FUNCTION sum_zakaz RETURN NUMBER; 
+END; 
+ 
+CREATE OR REPLACE PACKAGE BODY neopl_zakaz AS 
+    PROCEDURE o_p (percentik NUMBER) AS 
+        CURSOR c  
+        IS SELECT order_num FROM orders WHERE paid_date IS NULL; 
+        item_sum NUMBER; 
+    BEGIN 
+        FOR item IN c LOOP 
+            SELECT SUM(total_price) INTO item_sum FROM items WHERE order_num = item.order_num; 
+            UPDATE orders SET ship_charge = item_sum * (1 + percentik/100)  
+            WHERE order_num = item.order_num; 
+        END LOOP; 
+    END; 
+     
+    FUNCTION count_zakaz RETURN NUMBER AS 
+        number_zakaz NUMBER; 
+    BEGIN 
+        SELECT COUNT(*) INTO number_zakaz FROM orders WHERE paid_date IS NULL; 
+        RETURN number_zakaz; 
+    END; 
+     
+    FUNCTION sum_zakaz RETURN NUMBER AS 
+        order_sum NUMBER := 0; 
+        items_sum NUMBER; 
+        CURSOR c  
+        IS SELECT order_num FROM orders WHERE paid_date IS NULL; 
+    BEGIN    
+        FOR item IN c LOOP 
+            SELECT COALESCE(SUM(total_price),0) INTO items_sum FROM items WHERE order_num = item.order_num; 
+            order_sum := order_sum + items_sum; 
+        END LOOP; 
+        RETURN order_sum; 
+    END; 
+END;
+
+
+
+
+'32) – «Триггер, запрещающий изменять имена»
+Напишите триггер, не позволяющий изменять имена покупателей.'
+CREATE OR REPLACE TRIGGER BLOCK_UPD_NAMES_CUST
+BEFORE UPDATE ON customer5
+FOR EACH ROW
+BEGIN
+    IF :OLD.fname != :NEW.fname then
+        RAISE_APPLICATION_ERROR(-20101, 'Имена покупателей изменять нельзя!');
+    end if;
+END;
+
+
+'33) – «Триггер, подсчета стоимости товара»
+Напишите триггер, позволяющий автоматически подсчитывать стоимость товара в заказе (total_price) по цене (unit_price) и количеству (quantity).'
+CREATE OR REPLACE TRIGGER price_item
+BEFORE INSERT ON items
+FOR EACH ROW
+DECLARE
+quan items.QUANTITY%TYPE;
+t_price items.total_price%TYPE;
+u_price stock.unit_price%TYPE;
+BEGIN
+SELECT unit_price into u_price FROM stock WHERE stock.stock_num=:NEW.stock_num and stock.manu_code=:NEW.manu_code;
+t_price := :NEW.QUANTITY * u_price;
+:NEW.total_price := t_price;
+END;
+
+SELECT * FROM stock;
+INSERT INTO Items (Item_num, order_num, stock_num, manu_code, quantity, total_price)
+values (3, 1007, 5, 'ANZ', 10, 0);
+
+'34) – создание таблиц
+Напишите хранимую процедуру на PL/SQL, которая создает новую таблицу в БД. Таблица содержит столбцы Год, Месяц, Сумма. 
+Программа должна подсчитать суммы продаж товаров по месяцам и заполнить таблицу.
+Если в каком-то месяце продаж не было значение суммы должно быть нулевым и запись в таблице все равно присутствовать.
+Таблица должна быть заполнена с месяца первой продажи до месяца последней продажи'
+
+--------------------------------------------------------------процедура создающая таблицу
+create or replace procedure sell_tbl (
+    new_tab_name IN varchar2)
+is
+        begin
+
+            execute immediate 'create table '|| new_tab_name || '(  month_year date, total_sum number(8))';
+        end;
+--------------------------------------------------------------процедура создающая таблицу
+
+--------------------------------------------------------------процедура заполняющая таблицу
+create or replace procedure sell_tbl_fill
+is
+interval_date varchar2(80);
+start_date date;
+month_count varchar(80);
+sold_sum number(8) :=0;
+        begin
+            select (max(paid_date)- min(paid_date)) into interval_date from orders;
+            select min(extract(month from order_date)) into month_count from orders;
+            interval_date := round(interval_date/30); ----вычисление интервала между первой и последними датами заказов
+            select min(paid_date) into start_date from orders; ---- добавление неявного курсора с первой датой заказа
+        
+                for i in 1..interval_date ----- цикл с заполнением таблицы
+                    loop
+                    select coalesce(sum(items.total_price), 0) as sum_cost into sold_sum from items
+                        full outer join orders
+                        on items.order_num = orders.order_num
+                            where extract(month from orders.order_date) = month_count
+                                group by extract(month from orders.order_date), extract(year from orders.order_date);
+                                DBMS_OUTPUT.PUT_LINE (month_count);
+                        insert into  sold (month_year, total_sum) values (start_date, sold_sum );
+                        month_count := month_count + 1;
+                        start_date:= ADD_MONTHS( start_date, 1 );
+                    end loop;
+                    
+        end;
+exec sell_tbl_fill()
+--------------------------------------------------------------процедура заполняющая таблицу
+delete from sold
+
+drop table sold
+exec sell_tbl('sold')
+
+ select extract(month from paid_date) from orders;
+select*from orders;
+select max(paid_date)- min(paid_date) from orders
+
+
+select coalesce(sum(items.total_price), 0) as sum_cost 
+from items
+full outer join orders
+on items.order_num = orders.order_num
+where extract(month from orders.order_date) = 5
+group by extract(month from orders.order_date), extract(year from orders.order_date);
+
+--35 – изменение команды поиска
+--Разработать хранимую процедуру, выводящую на экран список покупателей. Параметры процедуры:
+--1.Строка, содержащая список выводимых столбцов через запятую.
+--2.Строка, определяющая столбцы, по которым должна проводиться сортировка (по возрастанию).
+--3.Символ разделитель, помещаемый между выводимыми столбцами.
+CREATE or replace Procedure spisok_cust (columnes  IN VARCHAR2, sorted IN VARCHAR2,determiner IN VARCHAR2)
+    AS
+    zapros VARCHAR2(1000);
+    cwetchik INTEGER := 0;
+    TYPE pesik IS TABLE OF VARCHAR2(100) INDEX BY PLS_INTEGER;
+    kotik pesik;
+    BEGIN
+    FOR FOO IN (    
+    SELECT REGEXP_SUBSTR (columnes, '[^,]+', 1, LEVEL) TXT FROM DUAL
+    CONNECT BY REGEXP_SUBSTR (columnes, '[^,]+', 1, LEVEL) IS NOT NULL)
+   LOOP
+      cwetchik := cwetchik + 1;
+      kotik(cwetchik) := FOO.TXT;
+   END LOOP;
+   zapros := 
+    'DECLARE CURSOR c1 IS SELECT '|| columnes ||' from customer order by '|| sorted ||'; 
+    BEGIN 
+    for i in c1
+    loop
+    DBMS_OUTPUT.put_line(';
+    for j in 1..kotik.count
+    loop
+    if j <> kotik.count then
+    zapros := zapros || 'i.' || trim(kotik(j)) || '|| '' '|| determiner ||' '' || ';
+    else zapros := zapros || 'i.' || trim(kotik(j));
+    end if;
+    end loop;
+    zapros := zapros || ');
+    end loop;
+    end;';
+    EXECUTE IMMEDIATE zapros;
+END;
+BEGIN
+spisok_cust('customer_num, lname, fname', 'lname','|||');
+END;
+
+
+37) – '«Загрузка файла»
+Разработать хранимую процедуру, привязывающую к товарам в таблице «каталог» картинки.
+Процедура получает два параметра. Первый – буква, с которой начинается название товара, 
+вторая, название файла с картинкой. Картинка привязывается ко всем товарам, название которых 
+начинается на указанную букву. Названием считать запись в поле «cat_descr». Обратить внимание, 
+что это поле имеет тип CLOB.'  
+
+
+create or replace procedure PROC1(search VARCHAR2,
+                                  file   VARCHAR2 ) 
+ IS
+  cursor test_cur(search IN VARCHAR2)
+   IS
+    SELECT cat_descr 
+    FROM catalog1
+    WHERE CAT_DESCR LIKE search||'%';
+
+ v_temp_var catalog1.cat_descr%TYPE;
+
+BEGIN
+ update catalog1 set cat_picture = BFILENAME ('DUMP_FILES1', file) where CAT_DESCR LIKE search||'%';
+ OPEN test_cur(search);
+  LOOP
+   FETCH test_cur INTO v_temp_var;
+    EXIT WHEN test_cur%NOTFOUND;
+
+    DBMS_OUTPUT.PUT_LINE(v_temp_var);  
+  END LOOP;
+
+ CLOSE test_cur;
+
+END;
+
+set serveroutput on
+exec PROC1 ('F','4.jpg')
+
+ 

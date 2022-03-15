@@ -1,0 +1,107 @@
+create or replace PROCEDURE p_smtp_insert(log_id_in IN number,lvu_id_in in number,type_id_in in number,task_id_in in number,session_id_in in number,program_id_in in number)
+IS
+     c utl_smtp.connection; -- переменная, представляющая smtp-соединение
+     lvu_name lvus.lvu_name%TYPE; --переменная для хранения значения из таблицы lvus
+     log_date logs.log_date%TYPE; --переменная для хранения значения из таблицы logs
+     type_name types.type_name%TYPE; --переменная для хранения значения из таблицы types
+     task tasks.task%TYPE; --переменная для хранения значения из таблицы tasks
+     prog_name programs.program_name%TYPE; --переменная для хранения значения из таблицы programs
+     smtpHost VARCHAR(65) := 'smtp.gmail.com';
+	 smtpPort INTEGER:= 587;
+	 emailHost VARCHAR(65) := 'demagogy2001@gmail.com';
+	 emailPassword VARCHAR(65) := 'pavelko2709';
+     msg_body VARCHAR2(30000) := '';
+	 curr_file_name VARCHAR2(88) := 'simple.csv';
+	 hello_massage VARCHAR2(88) := 'Mail with file';
+     
+	 l_boundary VARCHAR2(50) := '----=*#abc1234321cba#*=';
+	 l_step PLS_INTEGER := 12000;
+	
+BEGIN  
+
+INSERT INTO new_tables(log_id,lvu_id,log_date,type_id,task_id,session_id,program_id) --insert данных, после которых срабатывает триггер
+    VALUES(log_id_in,lvu_id_in,CURRENT_TIMESTAMP,type_id_in,task_id_in,session_id_in,program_id_in);
+
+ For i in (SELECT * FROM new_tables) loop  --прокрутка получателей 
+
+    SELECT lvu_name INTO lvu_name FROM lvus WHERE lvus.lvu_id = i.lvu_id; --курсор для получения значения lvu_name из таблицы lvus
+    SELECT log_date INTO log_date FROM new_tables WHERE new_tables.log_id = i.log_id; --курсор для получения значения log_date из таблицы logs
+    SELECT type_name INTO type_name FROM types WHERE types.type_id = i.type_id; --курсор для получения значения type_name из таблицы types
+    SELECT task INTO task FROM tasks WHERE tasks.task_id = i.task_id; --курсор для получения значения task из таблицы tasks
+    SELECT program_name INTO prog_name FROM programs WHERE programs.program_id = i.program_id; --курсор для получения значения program_name из таблицы programs
+
+
+msg_body := msg_body || lvu_name ||
+											   ',' || TO_CHAR(log_date) || 
+											   ',' || type_name || 
+											   ',' || task || 
+											   ',' || prog_name || utl_tcp.CRLF ;
+END LOOP;
+
+    --открытие коннектора    
+    c := utl_smtp.open_connection(
+            host => smtpHost
+            ,port => smtpPort
+            , wallet_path => 'file:C:\app\moroz\product\21c\admin\XE\wallet'
+            , wallet_password => 'Walletnasta12'
+            , secure_connection_before_smtp => false
+       );
+    utl_smtp.ehlo(c, smtpHost);
+    utl_smtp.starttls(c); --зашифрованный канал поверх обычного
+    utl_smtp.ehlo(c, smtpHost);
+    utl_smtp.auth(
+      c => c,
+      username => emailHost,
+      password => emailPassword,
+      schemes  => utl_smtp.all_schemes
+				); --авторизация
+        
+    
+    For i in (SELECT * FROM mails) loop  --прокрутка получателей письма      
+
+        utl_smtp.mail(c, emailHost);
+		utl_smtp.rcpt(c, i.mail);
+		utl_smtp.open_data(c); -- отправка команды data, после которой можно начать передачу письма
+		utl_smtp.write_data(c, 'From: demagogy2001@gmail.com' || UTL_TCP.crlf);
+		utl_smtp.write_data(c, 'To:'|| i.mail || UTL_TCP.crlf);
+		utl_smtp.write_data(c, 'Subject: pismo'|| UTL_TCP.crlf);
+		utl_smtp.write_data(c, 'MIME-Version: 1.0'||  UTL_TCP.crlf);
+		utl_smtp.write_data(c, 'Content-Type: multipart/mixed; boundary="' || l_boundary || '"' || UTL_TCP.crlf || UTL_TCP.crlf);
+
+		utl_smtp.write_data(c, '--' || l_boundary || UTL_TCP.crlf);
+		utl_smtp.write_data(c, 'Content-Type: text/plain; charset="iso-8859-1"' || UTL_TCP.crlf || UTL_TCP.crlf);
+		utl_smtp.write_data(c, hello_massage); --тело сообщения с нужными данными
+        utl_smtp.write_data(c, UTL_TCP.crlf || UTL_TCP.crlf);
+		
+		utl_smtp.write_data(c, '--' || l_boundary || UTL_TCP.crlf);
+		utl_smtp.write_data(c, 'Content-Type: text/plain; name="' || curr_file_name || '"' || UTL_TCP.crlf);
+		utl_smtp.write_data(c, 'Content-Disposition: attachment; filename="' || curr_file_name || '"' || UTL_TCP.crlf || UTL_TCP.crlf);
+
+        FOR i IN 0 .. TRUNC((DBMS_LOB.getlength(msg_body) - 1 )/l_step) LOOP
+			utl_smtp.write_data(c, DBMS_LOB.substr(msg_body, l_step, i * l_step + 1));
+		END LOOP;
+        
+		utl_smtp.write_data(c, UTL_TCP.crlf || UTL_TCP.crlf);
+		utl_smtp.write_data(c, '--' || l_boundary || '--' || UTL_TCP.crlf);
+
+		utl_smtp.close_data(c); --завершение сессии 
+
+    END LOOP;
+    utl_smtp.quit(c); --закрытие соединения 
+EXCEPTION
+    WHEN utl_smtp.transient_error OR utl_smtp.permanent_error THEN --transient_error - при получении кода 4хх(ошибка на стороне клиента); permanent_error - при получении кода 5хх(ошибка на стороне сервера)
+        BEGIN
+            utl_smtp.quit(c); -- при этих ошибках закрываем соединение
+        EXCEPTION
+            WHEN utl_smtp.transient_error OR utl_smtp.permanent_error THEN
+                NULL; -- When the SMTP server is down or unavailable, we don't
+                   -- have a connection to the server. The quit call will
+                   -- raise an exception that we can ignore.
+        END;
+        raise_application_error(-20000,
+           'Failed to send mail due to the following error: ' || sqlerrm); --вызываем исключение с сообщением(sqlerrm) об ошибки
+END;
+
+delete from new_tables where log_id=10
+
+Exec p_smtp_insert(10,5,6,9,7,8);

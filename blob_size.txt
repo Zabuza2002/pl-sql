@@ -1,0 +1,42 @@
+
+
+ DECLARE
+    TYPE type_of_tasks IS RECORD (
+      task_text CLOB,
+      task_size number(10),
+      task_size_Mb number(10),
+      task_size_Gb number(10));   
+    TYPE list_of_tasks IS VARRAY(10) of type_of_tasks;
+    lot list_of_tasks := list_of_tasks();
+    total_size_Mb number(10);
+    total_size_Gb number(10);
+    flag INTEGER(1);
+    offseted integer;
+    chars_read integer;
+    char_set varchar2(2000);
+    length_in_porcions number(10);
+    length_in_bytes_total number(10);
+    BEGIN
+       total_size_Mb := 0;
+       total_size_Gb := 0;
+       FOR i IN 1 .. 10
+        LOOP
+          offseted := 2000;
+          lot.extend;
+          SELECT description_b INTO lot(i).task_text FROM taskss WHERE task_id = i;
+          flag := 1;
+          length_in_bytes_total := 0;
+          length_in_porcions := DBMS_LOB.getlength(lot(i).task_text) / 2000;
+          FOR j IN 1 .. length_in_porcions
+            LOOP
+               length_in_bytes_total := length_in_bytes_total + lengthb(dbms_lob.substr(lot(i).task_text, offseted, (j-1)*offseted+1 ));
+            END LOOP;
+            
+          lot(i).task_size := length_in_bytes_total;
+          DBMS_OUTPUT.PUT_LINE('task_id('||i||') = '||lot(i).task_size||'b');
+          lot(i).task_size_Mb := lot(i).task_size / 1024;
+          DBMS_OUTPUT.PUT_LINE('task_id('||i||') = '||lot(i).task_size_Mb||'Mb');
+          lot(i).task_size_Gb := lot(i).task_size_Mb / 1024;
+          DBMS_OUTPUT.PUT_LINE('task_id('||i||') = '||lot(i).task_size_Gb||'Gb');
+        END LOOP;
+    END;

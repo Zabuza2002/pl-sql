@@ -1,0 +1,49 @@
+CREATE OR REPLACE TRIGGER errorMSG 
+for INSERT ON tasks1 --триггер, который вызывается после INSERT в таблицу tasks1
+compound trigger
+bool  boolean;
+ c utl_smtp.connection; -- переменная, представляющая smtp-соединение
+     smtpHost VARCHAR(65) := 'smtp.gmail.com';
+	 smtpPort INTEGER:= 587;
+	 emailHost VARCHAR(65) := 'Логин почты';
+	 emailPassword VARCHAR(65) := 'пароль почты';
+       i number;
+ after statement is
+  begin
+  select LENGTHB(TO_CHAR(SUBSTR(description,1,4000)))  into i 
+    from tasks1 
+    order by task_id desc
+    FETCH NEXT 1 ROWS ONLY;
+    if i > 1 then
+-------------------------------------------------------------------------------- блок с отправкой сообщения
+    c := utl_smtp.open_connection(
+            host => smtpHost
+            ,port => smtpPort
+            , wallet_path => 'file:C:\app\79683\product\21c\dbhomeXE\data\wallet' --ваш путь
+            , wallet_password => '5srXnL55' --ваш пароль от пакета
+            , secure_connection_before_smtp => false
+       ); --когда так открывается коннектор, то ehlo. Это для обоих способов авторизации
+    utl_smtp.ehlo(c, smtpHost);
+    utl_smtp.starttls(c); 
+    utl_smtp.ehlo(c, smtpHost);
+    utl_smtp.auth(
+      c => c,
+      username => emailHost,
+      password => emailPassword,
+      schemes  => utl_smtp.all_schemes
+					);
+        
+                utl_smtp.mail(c, emailHost);
+		utl_smtp.rcpt(c, 'pasha499@mail.ru');
+		utl_smtp.open_data(c);
+        UTL_SMTP.write_data (c, 'Date: ' || TO_CHAR (SYSDATE, 'DD-MON-YYYY HH24:MI:SS') || utl_tcp.crlf);
+		utl_smtp.write_data(c, 'From: ruswalktrough@gmail.com' || utl_tcp.crlf); --ваша почта
+		utl_smtp.write_data(c, 'Subject: Error message'|| utl_tcp.crlf);
+        UTL_SMTP.write_data (c, 'To: ' || 'pasha499@mail.ru' ||  utl_tcp.crlf);
+        UTL_SMTP.write_data (c, 'hello, pavel, total weight of your BLOB files is too large' || utl_tcp.crlf);
+		utl_smtp.write_data(c, utl_tcp.crlf);
+    UTL_SMTP.close_data(c);
+    utl_smtp.quit(c); --закрытие соединения 
+end if;
+end after statement;
+END;

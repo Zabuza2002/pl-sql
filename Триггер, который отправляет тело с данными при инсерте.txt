@@ -1,0 +1,118 @@
+create table new_tables(        --создание таблицы(обязательно создавать не от имени пользователя SYS, иначе триггер не создастся)
+                                --все остальное делается от имени SYS    
+    log_id Number primary key,
+    lvu_id Number,
+    log_date TIMESTAMP(6),
+    type_id Number,
+    task_id Number,
+    session_id Number,
+    program_id Number,
+    FOREIGN KEY (log_id) REFERENCES logs,
+    FOREIGN KEY (lvu_id) REFERENCES lvus,
+    FOREIGN KEY (type_id) REFERENCES types,
+    FOREIGN KEY (task_id) REFERENCES tasks,
+    FOREIGN KEY (program_id) REFERENCES programs
+);
+-- все таблицы создаются от имени обычного пользователя
+CREATE TABLE lvus(
+    lvu_id NUMBER PRIMARY KEY,
+    lvu_name VARCHAR2(100)
+);
+
+CREATE TABLE programs(
+    program_id NUMBER PRIMARY KEY,
+    program_name VARCHAR2(50)
+);
+
+CREATE TABLE logs(
+    log_id NUMBER PRIMARY KEY,
+    log_date TIMESTAMP(6)
+);
+
+CREATE TABLE types(
+    type_id NUMBER PRIMARY KEY,
+    type_name VARCHAR2(150)
+);
+
+CREATE TABLE tasks(
+    task_id NUMBER PRIMARY KEY,
+    task VARCHAR2(200)
+);
+
+INSERT INTO lvus(lvu_id,lvu_name) VALUES(1, 'First lvu');
+INSERT INTO programs(program_id,program_name) VALUES(1, 'Name of program');
+INSERT INTO logs(log_id,log_date) VALUES(1, TO_DATE('01/01/2021','dd/mm/yyyy'));
+INSERT INTO types(type_id,type_name) VALUES(1, 'Type name');
+INSERT INTO tasks(task_id,task) VALUES(1, 'First task');
+
+--создание синонимов и триггера выполняется от имени SYS
+
+CREATE PUBLIC SYNONYM new_tables FOR nikita.new_tables; --создается синоним для таблицы, что можно было обращаться к таблице без схемы
+CREATE PUBLIC SYNONYM lvus FOR nikita.lvus;
+CREATE PUBLIC SYNONYM programs FOR nikita.programs;
+CREATE PUBLIC SYNONYM logs FOR nikita.logs;
+CREATE PUBLIC SYNONYM types FOR nikita.types;
+CREATE PUBLIC SYNONYM tasks FOR nikita.tasks;
+     
+CREATE OR REPLACE TRIGGER smtp_insert --триггер, который вызывается после INSERT в таблицу new_tables
+AFTER INSERT ON new_tables
+FOR EACH ROW
+DECLARE
+     c utl_smtp.connection; -- переменная, представляющая smtp-соединение
+     lvu_name lvus.lvu_name%TYPE; --переменная для хранения значения из таблицы lvus
+     log_date logs.log_date%TYPE; --переменная для хранения значения из таблицы logs
+     type_name types.type_name%TYPE; --переменная для хранения значения из таблицы types
+     task tasks.task%TYPE; --переменная для хранения значения из таблицы tasks
+     prog_name programs.program_name%TYPE; --переменная для хранения значения из таблицы programs
+
+    PROCEDURE send_header(name IN VARCHAR2, header IN VARCHAR2) AS --процедура для формирования заголовков сообщения
+    BEGIN
+        utl_smtp.write_data(c, name || ': ' || header || utl_tcp.CRLF);
+    END;
+
+BEGIN
+    c := utl_smtp.open_connection('smtp.google.com'); --здесь необходимо указать smtp сервер
+    utl_smtp.helo(c, 'gmail.com');			 -- домен почты
+    utl_smtp.mail(c, 'v.nik3000@gmail.com');		--указываем почту отправителя
+    utl_smtp.rcpt(c, 'deepfake.nikita@gmail.com');		--почту получателя
+    utl_smtp.open_data(c); -- отправка команды data, после которой можно начать передачу письма
+    send_header('From',    '"Server" <v.nik3000@gmail.com>');	--здесь формируются лишь данные заголовков, они не влияют на отправку
+    send_header('To',      '"Recipient" <deepfake.nikita@gmail.com>');  -- заголовок письма
+    send_header('Subject', 'Insert'); -- тема письма
+    
+    --курсоры для получения значений из таблиц по значениям внешних ключей, добавленных в таблицу new_tables
+    SELECT lvu_name INTO lvu_name FROM lvus WHERE lvus.lvu_id = :new.log_id; --курсор для получения значения lvu_name из таблицы lvus
+    SELECT log_date INTO log_date FROM logs WHERE logs.log_id = :new.log_id; --курсор для получения значения log_date из таблицы logs
+    SELECT type_name INTO type_name FROM types WHERE types.type_id = :new.type_id; --курсор для получения значения type_name из таблицы types
+    SELECT task INTO task FROM tasks WHERE tasks.task_id = :new.task_id; --курсор для получения значения task из таблицы tasks
+    SELECT program_name INTO prog_name FROM programs WHERE programs.program_id = :new.program_id; --курсор для получения значения program_name из таблицы programs
+    
+    utl_smtp.write_data(c, utl_tcp.CRLF || 'LVU=' || lvu_name || CHR(10)||CHR(13) || 
+                                           'LOG_DATE=' || TO_CHAR(log_date) || CHR(10)||CHR(13)|| 
+                                           'TYPE_NAME=' || type_name || CHR(10)||CHR(13)||
+                                           'TASK=' || task || CHR(10)||CHR(13)||
+                                           'PROGRAM_NAME=' || prog_name); --тело сообщения с нужными данными
+    
+    utl_smtp.close_data(c); --завершение сессии 
+    utl_smtp.quit(c); --закрытие соединения 
+EXCEPTION
+    WHEN utl_smtp.transient_error OR utl_smtp.permanent_error THEN --transient_error - при получении кода 4хх(ошибка на стороне клиента); permanent_error - при получении кода 5хх(ошибка на стороне сервера)
+        BEGIN
+            utl_smtp.quit(c); -- при этих ошибках закрываем соединение
+        EXCEPTION
+            WHEN utl_smtp.transient_error OR utl_smtp.permanent_error THEN
+                NULL; -- When the SMTP server is down or unavailable, we don't
+                   -- have a connection to the server. The quit call will
+                   -- raise an exception that we can ignore.
+        END;
+        raise_application_error(-20000,
+           'Failed to send mail due to the following error: ' || sqlerrm); --вызываем исключение с сообщением(sqlerrm) об ошибки
+END;
+
+/*
+INSERT INTO new_tables(log_id,lvu_id,log_date,type_id,task_id,session_id,program_id) --insert данных, после которых срабатывает триггер
+VALUES(5,2,TO_DATE('2019/07/22', 'yyyy/mm/dd'),3,4,5,6);
+*/
+
+INSERT INTO new_tables(log_id,lvu_id,log_date,type_id,task_id,session_id,program_id) --insert данных, после которых срабатывает триггер
+VALUES(1,1,TO_DATE('2019/07/22', 'yyyy/mm/dd'),1,1,1,1);

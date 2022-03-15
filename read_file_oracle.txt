@@ -1,0 +1,104 @@
+CONNECT SYS AS SYSDBA;
+GRANT EXECUTE ON UTL_FILE TO PUBLIC; 
+
+CREATE OR REPLACE DIRECTORY IMPORTDIR AS 'C:\Ftest';
+
+GRANT READ,WRITE ON DIRECTORY IMPORTDIR TO PUBLIC; 
+
+drop table new_tables
+
+create table new_tables(
+log_id Number primary key,
+lvu_name      VARCHAR(50),
+log_date      TIMESTAMP(6),
+type_name     VARCHAR(50),
+task          VARCHAR(50),
+program_name  VARCHAR(50))
+
+
+CREATE OR REPLACE PROCEDURE LoadLecturerData(p_FileDir  IN VARCHAR2,p_FileName IN VARCHAR2)
+    AS
+      v_FileHandle UTL_FILE.FILE_TYPE;
+      v_NewLine  VARCHAR2(1000);  -- Input line
+      n_lvu_name         new_tables.lvu_name%TYPE;
+      n_log_date         new_tables.log_date%TYPE;
+      n_type_name        new_tables.type_name%TYPE;
+      n_task             new_tables.task%TYPE;
+      n_program_name     new_tables.program_name%TYPE;
+      v_FirstComma    NUMBER;
+      v_SecondComma   NUMBER;
+      v_ThirdComma    NUMBER;
+      v_FourthComma   NUMBER;
+      p_TotalInserted NUMBER;
+   BEGIN
+     -- посмотрим количество строк и запишем в счетчик
+     SELECT COUNT(log_id) into p_TotalInserted FROM new_tables;
+     v_FileHandle := UTL_FILE.FOPEN(p_FileDir ,p_FileName, 'r');
+     p_TotalInserted := p_TotalInserted + 1;
+     LOOP
+       BEGIN
+       UTL_FILE.GET_LINE(v_FileHandle, v_NewLine);
+       EXCEPTION
+         WHEN NO_DATA_FOUND THEN
+       EXIT;
+       END;
+       
+       --длинна
+       v_FirstComma := INSTR(v_NewLine, ',', 1, 1);
+       v_SecondComma := INSTR(v_NewLine, ',', 1, 2);
+       v_ThirdComma := INSTR(v_NewLine, ',', 1, 3);
+       v_FourthComma := INSTR(v_NewLine, ',', 1, 4);
+       
+       --первый параметр по длинне
+       n_lvu_name     := SUBSTR(v_NewLine, 1, v_FirstComma - 1);
+       --второй параметр по длинне
+       n_log_date     := SUBSTR(v_NewLine, v_FirstComma + 1, v_SecondComma - v_FirstComma - 1);
+       --третий параметр по длинне
+       n_type_name    := SUBSTR(v_NewLine, v_SecondComma + 1,v_ThirdComma - v_SecondComma - 1);
+       --четвертый параметр по длинне
+       n_task         := SUBSTR(v_NewLine, v_ThirdComma + 1,v_FourthComma - v_ThirdComma - 1);
+       --пятый параметр по длинне
+       n_program_name := SUBSTR(v_NewLine, v_FourthComma + 1);
+       
+       --делаем инсерт в таблицу
+       INSERT INTO new_tables (log_id, lvu_name, log_date, type_name,task,program_name  ) VALUES (p_TotalInserted, TO_CHAR(n_lvu_name), TO_CHAR(n_log_date), TO_CHAR(n_type_name), TO_CHAR(n_task), TO_CHAR(n_program_name));
+       --добавляем 1 к id
+       p_TotalInserted := p_TotalInserted + 1;
+       
+     END LOOP;
+     UTL_FILE.FCLOSE(v_FileHandle);
+     COMMIT;
+   -- много исключений
+   EXCEPTION
+     WHEN UTL_FILE.INVALID_OPERATION THEN
+      UTL_FILE.FCLOSE(v_FileHandle);
+      RAISE_APPLICATION_ERROR(-20051, 'LoadLecturerData: Invalid Operation');
+     WHEN UTL_FILE.INVALID_FILEHANDLE THEN
+       UTL_FILE.FCLOSE(v_FileHandle);
+       RAISE_APPLICATION_ERROR(-20052, 'LoadLecturerData: Invalid File Handle');
+     WHEN UTL_FILE.READ_ERROR THEN
+       UTL_FILE.FCLOSE(v_FileHandle);
+       RAISE_APPLICATION_ERROR(-20053, 'LoadLecturerData: Read Error');
+     WHEN UTL_FILE.INVALID_PATH THEN
+       UTL_FILE.FCLOSE(v_FileHandle);
+       RAISE_APPLICATION_ERROR(-20054, 'LoadLecturerData: Invalid Path');
+     WHEN UTL_FILE.INVALID_MODE THEN
+       UTL_FILE.FCLOSE(v_FileHandle);
+       RAISE_APPLICATION_ERROR(-20055, 'LoadLecturerData: Invalid Mode');
+     WHEN UTL_FILE.INTERNAL_ERROR THEN
+       UTL_FILE.FCLOSE(v_FileHandle);
+       RAISE_APPLICATION_ERROR(-20056, 'LoadLecturerData: Internal Error');
+     WHEN VALUE_ERROR THEN
+       UTL_FILE.FCLOSE(v_FileHandle);
+       RAISE_APPLICATION_ERROR(-20057, 'LoadLecturerData: Value Error');
+     WHEN OTHERS THEN
+       UTL_FILE.FCLOSE(v_FileHandle);
+       RAISE;
+   END LoadLecturerData;
+--запись в таблицу
+begin
+LoadLecturerData('IMPORTDIR','date.csv');
+end;
+--посмотрим в таблицу
+select * from new_tables
+
